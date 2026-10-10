@@ -103,6 +103,13 @@ accounts, two cards, a mortgage, savings and a small stock portfolio. Delete `de
    cp accounts.example.json accounts.json
    ```
 
+   For ONE ZERO, you may enter your email, password, and registered phone number in Settings.
+   Use international phone format, for example `+972501234567`.
+   The app saves the credentials in the local, git-ignored `accounts.json` file with owner-only file permissions.
+   Select **עדכון נתונים** after saving. When the bank sends an SMS code, enter the code in the app.
+   ONE ZERO support is experimental. Saving credentials does not confirm a successful bank connection.
+   To sync only ONE ZERO, start the app with `SCRAPE_ONLY=oneZero npm run dev`.
+
    `accounts.json` lists one entry per bank or card company. `companyId` is a company id of `israeli-bank-scrapers`;
    `credentials` are the fields that company's login needs:
 

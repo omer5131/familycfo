@@ -8,6 +8,8 @@ import {
   CalendarClock, Coins, Layers, Plus, RefreshCw, Settings2, SlidersHorizontal, Tags, Users, Wallet, Wand2, X,
 } from 'lucide-react';
 import { AccountSelect, CategorySelect, MemberSelect, PageHeader } from '../components/ui';
+import { ScrapeButton } from '../components/ScrapeButton';
+import { OneZeroReportImport } from '../components/OneZeroReportImport';
 
 interface SyncRow { company: string; startedAt: string; success: number; errorType: string | null; errorMessage: string | null; newTransactions: number; lastSuccess: string | null }
 interface FxRow { currency: string; rate_to_ils: number; date: string; source: string }
@@ -51,6 +53,8 @@ export default function Settings() {
         </button>} />
 
       <Section title="כללי" icon={SlidersHorizontal} color="var(--chart-1)">
+        <OneZeroConnection />
+        <OneZeroReportImport />
         <div className="grid max-w-4xl gap-4 sm:grid-cols-3">
           <label className="block">
             <span className="label">יום תחילת מחזור חודשי</span>
@@ -172,6 +176,35 @@ export default function Settings() {
       {pipeline.data && <div role="status" className="card animate-rise-in fixed bottom-[max(1rem,env(safe-area-inset-bottom))] start-4 z-40 max-w-[calc(100vw-2rem)] py-3 text-sm shadow-(--shadow-overlay) md:py-3">עודכן: {Object.entries(pipeline.data).map(([k, v]) => `${k} ${v}`).join(' · ')}</div>}
     </>
   );
+}
+
+function OneZeroConnection() {
+  const qc = useQueryClient();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const connection = useQuery({ queryKey: ['one-zero-connection'], queryFn: () => api.get<{ configured: boolean }>('/connections/one-zero') });
+  const save = useMutation({
+    mutationFn: () => api.post('/connections/one-zero', { email, password, phoneNumber }),
+    onSuccess: () => {
+      setEmail(''); setPassword(''); setPhoneNumber('');
+      qc.invalidateQueries({ queryKey: ['one-zero-connection'] });
+    },
+  });
+  return <div className="mb-6 max-w-xl space-y-3 rounded-xl border p-4">
+    <h3 className="font-semibold">חיבור חשבון ONE ZERO</h3>
+    <p className="text-sm text-zinc-500">פרטי הכניסה נשמרים בקובץ מקומי במחשב. החיבור של ONE ZERO ניסיוני. לאחר השמירה, לחץ על עדכון נתונים והזן את קוד ה-SMS כאן.</p>
+    {connection.data?.configured && <p role="status">פרטי הכניסה נשמרו. אפשר להתחיל עדכון נתונים או להחליף את הפרטים.</p>}
+    {connection.error && <p role="alert">{connection.error.message}</p>}
+    <form className="space-y-3" onSubmit={e => { e.preventDefault(); save.mutate(); }}>
+      <label className="block">אימייל<input className="input" dir="ltr" type="email" autoComplete="username" required value={email} onChange={e => setEmail(e.target.value)} /></label>
+      <label className="block">סיסמה<input className="input" dir="ltr" type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} /></label>
+      <label className="block">טלפון הרשום בבנק<input className="input" dir="ltr" type="tel" placeholder="+972501234567" pattern="\+[1-9][0-9]{7,14}" required value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} /></label>
+      <button className="btn btn-primary" disabled={save.isPending}>{save.isPending ? 'שומר…' : 'שמור פרטי חיבור'}</button>
+      {save.error && <p role="alert">{save.error.message}</p>}
+    </form>
+    {connection.data?.configured && <ScrapeButton />}
+  </div>;
 }
 
 function Section({ id, title, subtitle, icon: Icon, color, children }: {

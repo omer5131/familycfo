@@ -1,4 +1,41 @@
-# Importing pension and insurance reports
+# Importing reports
+
+## ONE ZERO bank transactions
+
+When the bank connection fails, use the text-based PDF report named
+`פירוט תנועות שקליות בחשבון` from ONE ZERO.
+
+1. Open Settings → ייבוא תנועות ONE ZERO מדוח PDF.
+2. Select the PDF. The maximum file size is 12 MiB. The maximum page count is 100.
+3. Select `בדוק דוח`. Check the account number, date range, row count, and closing balance.
+4. Select `ייבא תנועות`.
+5. Open Transactions. Check the imported rows and assign categories where needed.
+
+The importer must check every running balance and the report debit and credit totals before it saves rows.
+The importer must preserve manual categories, members, tags, and notes.
+The importer uses the account number to select or create the ONE ZERO bank account.
+The importer stores the closing balance with the report end date.
+The importer does not mark the bank connection as successful.
+The importer runs the local analysis pipeline after it saves the rows.
+When analysis fails, the importer shows a warning. Select the recalculation button in Settings to retry.
+
+The PDF stays on the local computer. The upload endpoint does not store the original PDF.
+Scanned PDFs, foreign-currency reports, and other bank layouts are not supported.
+Identical same-day rows use their running balance to keep separate identities.
+Scraped rows use the existing matching logic. If descriptions differ between a scrape and a PDF,
+the user must check for duplicate rows.
+
+The same importer is available from the terminal:
+
+```bash
+npm run import:one-zero -- "/path/to/report.pdf" --preview
+npm run import:one-zero -- "/path/to/report.pdf"
+```
+
+Validation must cover total checks, repeated imports, overlapping reports, separate identical payments,
+manual-field preservation, old balance dates, and rejection without partial writes.
+
+## Pension and insurance reports
 
 Pension, study-fund and insurance data doesn't come from the bank scrape — it comes from reports: the periodic report
 of your insurance / pension agent, the pension clearing house (המסלקה הפנסיונית), הר הביטוח, or the insurers' personal

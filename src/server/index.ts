@@ -10,6 +10,8 @@ import { insuranceRoutes } from './routes/insurance.js';
 import { pensionRoutes } from './routes/pension.js';
 import { investmentRoutes } from './routes/investments.js';
 import { setRate } from '../analytics/fx.js';
+import { connectionRoutes } from './routes/connections.js';
+import { transactionImportRoutes } from './routes/transactionImports.js';
 
 const db = getDb();
 // Local-only: this API exposes the household's full financial data and has no login
@@ -72,6 +74,8 @@ app.put('/api/fx', async req => {
 });
 
 transactionRoutes(app, db);
+connectionRoutes(app);
+transactionImportRoutes(app, db);
 analyticsRoutes(app, db);
 eventRoutes(app, db);
 categoryRoutes(app, db);

@@ -18,6 +18,7 @@
     "migrate": "tsx src/db/migrate.ts",
     "import:pension": "tsx src/import/pensionReport.ts",
     "import:insurance": "tsx src/import/insurancePolicies.ts",
+    "import:one-zero": "tsx src/import/oneZeroReport.ts",
     "pipeline": "tsx src/pipeline.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
@@ -29,6 +30,7 @@
     "fastify": "^5.12.5",
     "israeli-bank-scrapers": "^6.12.2",
     "node-cron": "^3.0.3",
+    "pdfjs-dist": "^4.10.38",
     "puppeteer": "^24.37.1",
     "zod": "^3.25.76"
   },
@@ -36,10 +38,10 @@
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.0.0",
     "@types/node-cron": "^3.0.11",
+    "concurrently": "^9.2.1",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
-    "vitest": "^4.0.2",
-    "concurrently": "^9.2.1"
+    "vitest": "^4.0.2"
   },
   "overrides": {
     "israeli-bank-scrapers": {

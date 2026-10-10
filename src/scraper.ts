@@ -5,6 +5,7 @@ import * as readline from 'readline';
 import type { Page } from 'puppeteer';
 import { existsSync } from 'fs';
 import { platform } from 'os';
+import { scrapeErrorMessage } from './ingest/scrapeError.js';
 
 function findChromePath(): string | undefined {
   const paths: Record<string, string[]> = {
@@ -237,9 +238,13 @@ export async function scrapeAll(config: Config, db: DB = getDb(), hooks: ScrapeH
         },
       });
 
-      const result = await scraper.scrape(account.credentials as never);
+      const credentials = account.companyId === 'oneZero' && !account.credentials.otpLongTermToken
+        ? { ...account.credentials, otpCodeRetriever: () => hooks.requestOtp ? hooks.requestOtp(account.companyId) : promptOtp() }
+        : account.credentials;
+      const result = await scraper.scrape(credentials as never);
 
       if (!result.success) {
+        result.errorMessage = scrapeErrorMessage(account.companyId, result.errorMessage);
         console.error(`Failed to scrape ${account.companyId}:`, result.errorType, result.errorMessage);
         if (pageStateAtClose) console.error(pageStateAtClose);
         recordScrapeRun(db, { company: account.companyId, startedAt, success: false,
