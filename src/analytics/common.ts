@@ -199,6 +199,7 @@ export interface TxFilter {
   businessId?: number;
   tagIds?: number[];
   categoryId?: number;
+  excludeCategoryIds?: number[];
   accountId?: string;
   search?: string;
 }
@@ -211,6 +212,7 @@ export function filterTx(txs: Tx[], f: TxFilter): Tx[] {
     (!f.tagIds?.length || f.tagIds.every(id => t.tagIds.includes(id))) &&
     // a parent category includes its sub-categories
     (f.categoryId == null || t.categoryId === f.categoryId || t.categoryParentId === f.categoryId) &&
+    (!f.excludeCategoryIds?.length || !f.excludeCategoryIds.some(id => t.categoryId === id || t.categoryParentId === id)) &&
     (f.accountId == null || t.accountId === f.accountId) &&
     (!q || t.description.toLowerCase().includes(q) || (t.notes ?? '').toLowerCase().includes(q)));
 }

@@ -9,6 +9,7 @@ import { isOverdue, linkPlanned, listPlanned, matchPlanned, plannedCandidates, p
 
 interface TxQuery {
   from?: string; to?: string; cycle?: string; member?: string; business?: string; tags?: string;
+  excludeCategories?: string;
   category?: string; account?: string; search?: string; kind?: string; review?: string; hideCardPayments?: string;
   /** YYYY-MM-DD: only card rows charged in that statement (same card, same charge month) */
   charge?: string;
@@ -23,6 +24,7 @@ export function parseFilter(q: TxQuery) {
     businessId: q.business ? Number(q.business) : undefined,
     tagIds: q.tags ? q.tags.split(',').map(Number).filter(Boolean) : undefined,
     categoryId: q.category ? Number(q.category) : undefined,
+    excludeCategoryIds: q.excludeCategories?.split(',').map(Number).filter(id => Number.isSafeInteger(id) && id > 0),
     accountId: q.account || undefined,
     search: q.search || undefined,
   };

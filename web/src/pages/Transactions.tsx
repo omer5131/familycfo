@@ -44,6 +44,7 @@ export default function Transactions() {
   const [cycle, setCycle] = useState(urlParams.get('cycle') ?? todayIso().slice(0, 7));
   const [search, setSearch] = useState(urlParams.get('search') ?? '');
   const [category, setCategory] = useState<number | null>(urlParams.get('category') ? Number(urlParams.get('category')) : null);
+  const [excludedCategories, setExcludedCategories] = useState<number[]>(() => (urlParams.get('excludeCategories') ?? '').split(',').map(Number).filter(id => Number.isSafeInteger(id) && id > 0));
   const [account, setAccount] = useState<string | null>(urlParams.get('account'));
   const [kind, setKind] = useState(urlParams.get('kind') ?? '');
   const [review, setReview] = useState(urlParams.get('review') === '1');
@@ -56,12 +57,13 @@ export default function Transactions() {
     if (cycle) next.set('cycle', cycle);
     if (search) next.set('search', search);
     if (category != null) next.set('category', String(category));
+    if (excludedCategories.length) next.set('excludeCategories', excludedCategories.join(','));
     if (account) next.set('account', account);
     if (kind) next.set('kind', kind);
     if (review) next.set('review', '1');
     if (charge) next.set('charge', charge);
     setUrlParams(next, { replace: true });
-  }, [cycle, search, category, account, kind, review, charge, setUrlParams]);
+  }, [cycle, search, category, excludedCategories, account, kind, review, charge, setUrlParams]);
   const [hideCardPayments, setHideCardPayments] = useState(true);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [editing, setEditing] = useState<Tx | null>(null);
@@ -70,7 +72,7 @@ export default function Transactions() {
   const [manual, setManual] = useState<Tx | 'new' | null>(null);
   const [suggestRule, setSuggestRule] = useState<{ tx: Tx; patch: Record<string, unknown>; count: number } | null>(null);
 
-  const query = { ...params, cycle: review ? undefined : cycle || undefined, search, category, account, kind, review: review ? 1 : undefined, charge: charge ?? undefined, hideCardPayments: hideCardPayments ? 1 : undefined, limit: 1000 };
+  const query = { ...params, cycle: review ? undefined : cycle || undefined, search, category, excludeCategories: excludedCategories.length ? excludedCategories.join(',') : undefined, account, kind, review: review ? 1 : undefined, charge: charge ?? undefined, hideCardPayments: hideCardPayments ? 1 : undefined, limit: 1000 };
   const { data, isLoading, error } = useQuery({ queryKey: ['transactions', query], queryFn: () => api.get<TxPage>(`/transactions${qs(query)}`) });
 
   const invalidate = () => {
@@ -201,6 +203,21 @@ export default function Transactions() {
         </div>
       </div>
 
+      <div className="card mb-4 flex flex-wrap items-center gap-2 p-3">
+        <span className="text-sm text-fg-muted">הסתר קטגוריות:</span>
+        <CategorySelect className="input w-52" value={null} emptyLabel="בחר קטגוריה להסתרה…" onChange={id => {
+          if (id != null) setExcludedCategories(ids => ids.includes(id) ? ids : [...ids, id]);
+        }} />
+        {excludedCategories.map(id => (
+          <button key={id} className="btn" onClick={() => setExcludedCategories(ids => ids.filter(x => x !== id))}
+            aria-label={`הסר הסתרת ${meta?.categories.find(c => c.id === id)?.name ?? id}`}>
+            {meta?.categories.find(c => c.id === id)?.name ?? id}<X className="h-3 w-3" />
+          </button>
+        ))}
+        {excludedCategories.length > 0 && <button className="btn-ghost" onClick={() => setExcludedCategories([])}>נקה הסתרות</button>}
+        <p className="w-full text-xs text-fg-muted">הסתרת קטגוריות מסננת את הרשימה והסיכומים בעמוד זה. להעברה בין חשבונות שלך, בחר בתנועה סוג ״העברה״ כדי שלא תיספר כהכנסה או הוצאה בכל הדוחות.</p>
+      </div>
+
       {selected.size > 0 && (
         <div className="card animate-rise-in sticky top-[calc(var(--header-h)+0.5rem)] z-20 mb-3 flex flex-wrap items-center gap-2 border-brand-200 bg-brand-50/95 p-3 shadow-(--shadow-overlay) backdrop-blur-md md:p-3 dark:border-brand-700/60 dark:bg-zinc-900/95">
           <span className="min-w-14 px-1 text-sm font-semibold tabular-nums text-brand-800 dark:text-brand-100">{selected.size} נבחרו</span>
@@ -209,6 +226,8 @@ export default function Transactions() {
           <BusinessSelect className="input w-40 max-sm:w-[calc(50%-0.25rem)]" value={null} onChange={id => bulk.mutate({ businessId: id })} />
           <Picker className="input w-36 max-sm:w-[calc(50%-0.25rem)]" value="" options={tagOptions} placeholder="+ תגית"
             onChange={v => v && bulk.mutate({ addTagIds: [Number(v)] })} />
+          <Picker className="input w-40" value="" options={kindOptions()} placeholder="שנה סוג…" searchable={false}
+            disabled={bulk.isPending} onChange={v => v && bulk.mutate({ kind: v })} />
           <NewTagInput placeholder="תגית חדשה + Enter" onCreated={t => bulk.mutate({ addTagIds: [t.id] })} />
           <button className="btn" onClick={() => bulk.mutate({ excluded: 1 })}><EyeOff />הסתר מהחישובים</button>
           <button className="btn-ghost" onClick={() => setSelected(new Set())}>ביטול</button>
