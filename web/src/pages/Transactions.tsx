@@ -234,6 +234,7 @@ export default function Transactions() {
         </div>
       )}
 
+      {(patch.error || bulk.error) && <ErrorBox error={patch.error || bulk.error} />}
       {isLoading ? <Loading /> : error ? <ErrorBox error={error} /> : rows.length === 0 ? (charge ? (
         <Empty>
           אין עדיין פירוט של החיוב הזה — הכרטיס לא דיווח אילו עסקאות ייכנסו לחיוב של {day(charge)} (הסכום בתחזית הוא הערכה לפי חיובים קודמים).

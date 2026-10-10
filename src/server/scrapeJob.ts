@@ -54,8 +54,8 @@ export function startScrape(db: DB): ScrapeJobState {
   const only = process.env.SCRAPE_ONLY?.split(',').map(s => s.trim()).filter(Boolean);
   state = {
     ...idle(), status: 'running', startedAt: new Date().toISOString(),
-    companies: config.accounts.filter(a => !only || only.includes(a.companyId))
-      .map(a => ({ company: a.companyId, status: 'pending', newTransactions: 0, error: null })),
+    companies: [...new Set(config.accounts.filter(a => !only || only.includes(a.companyId)).map(a => a.companyId))]
+      .map(company => ({ company, status: 'pending', newTransactions: 0, error: null })),
   };
 
   (async () => {
@@ -69,8 +69,9 @@ export function startScrape(db: DB): ScrapeJobState {
         else {
           // a bank that ended (e.g. timed out) no longer needs its code
           if (state.otp?.company === event.company) clearOtp();
+          const previous = state.companies.find(c => c.company === event.company);
           setCompany(event.company, event.success
-            ? { status: 'done', newTransactions: event.newTransactions }
+            ? { status: previous?.error ? 'failed' : 'done', newTransactions: (previous?.newTransactions ?? 0) + event.newTransactions }
             : { status: 'failed', error: event.errorMessage || event.errorType || 'error' });
         }
       },

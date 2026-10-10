@@ -54,6 +54,7 @@ export default function Settings() {
 
       <Section title="כללי" icon={SlidersHorizontal} color="var(--chart-1)">
         <OneZeroConnection />
+        <IsracardConnection />
         <OneZeroReportImport />
         <div className="grid max-w-4xl gap-4 sm:grid-cols-3">
           <label className="block">
@@ -176,6 +177,36 @@ export default function Settings() {
       {pipeline.data && <div role="status" className="card animate-rise-in fixed bottom-[max(1rem,env(safe-area-inset-bottom))] start-4 z-40 max-w-[calc(100vw-2rem)] py-3 text-sm shadow-(--shadow-overlay) md:py-3">עודכן: {Object.entries(pipeline.data).map(([k, v]) => `${k} ${v}`).join(' · ')}</div>}
     </>
   );
+}
+
+function IsracardConnection() {
+  const qc = useQueryClient();
+  const [id, setId] = useState('');
+  const [card6Digits, setCard6Digits] = useState('');
+  const [password, setPassword] = useState('');
+  const connection = useQuery({ queryKey: ['isracard-connection'], queryFn: () => api.get<{ count: number }>('/connections/isracard') });
+  const save = useMutation({
+    mutationFn: () => api.post('/connections/isracard', { id, card6Digits, password }),
+    onSuccess: () => {
+      setId(''); setCard6Digits(''); setPassword('');
+      qc.invalidateQueries({ queryKey: ['isracard-connection'] });
+    },
+  });
+  return <div id="isracard" className="mb-5 space-y-3 scroll-mt-20">
+    <h3 className="font-semibold">חיבור ישראכרט</h3>
+    <p className="text-sm text-zinc-500">אפשר להוסיף כמה פרטי כניסה. כרטיסים שמופיעים באותה כניסה ייאספו יחד. כדי לעדכן סיסמה, הזינו שוב את אותה תעודת זהות ואת אותן 6 ספרות.</p>
+    {connection.data && <p role="status">מספר חיבורי ישראכרט שנשמרו: {connection.data.count}</p>}
+    {connection.error && <p role="alert">{connection.error.message}</p>}
+    <form className="grid max-w-4xl gap-3 sm:grid-cols-3" onSubmit={e => { e.preventDefault(); save.mutate(); }}>
+      <label><span className="label">תעודת זהות (9 ספרות)</span><input className="input" type="password" inputMode="numeric" autoComplete="off" pattern="[0-9]{9}" maxLength={9} required value={id} onChange={e => setId(e.target.value)} /></label>
+      <label><span className="label">6 ספרות אחרונות של הכרטיס</span><input className="input" type="password" inputMode="numeric" autoComplete="off" pattern="[0-9]{6}" maxLength={6} required value={card6Digits} onChange={e => setCard6Digits(e.target.value)} /></label>
+      <label><span className="label">סיסמת ישראכרט</span><input className="input" type="password" autoComplete="off" required value={password} onChange={e => setPassword(e.target.value)} /></label>
+      <button className="btn btn-primary" disabled={save.isPending}>{save.isPending ? 'שומר…' : 'שמור חיבור ישראכרט'}</button>
+      {save.isSuccess && <p role="status">החיבור נשמר. אפשר להוסיף כניסה נוספת או להתחיל עדכון נתונים.</p>}
+      {save.error && <p role="alert">{save.error.message}</p>}
+    </form>
+    {!!connection.data?.count && <ScrapeButton />}
+  </div>;
 }
 
 function OneZeroConnection() {

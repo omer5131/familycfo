@@ -4,6 +4,8 @@ import { openDb, type DB } from '../src/db/connection.js';
 import { parseOneZeroPages, saveOneZeroReport, type ReportText } from '../src/import/oneZeroReport.js';
 import { transactionImportRoutes } from '../src/server/routes/transactionImports.js';
 import { insuranceRoutes } from '../src/server/routes/insurance.js';
+import { transactionRoutes } from '../src/server/routes/transactions.js';
+import { runPipeline } from '../src/pipeline.js';
 
 vi.mock('../src/import/oneZeroReport.js', async importOriginal => {
   const original = await importOriginal<typeof import('../src/import/oneZeroReport.js')>();
@@ -27,6 +29,35 @@ let db: DB | undefined;
 afterEach(() => { db?.close(); db = undefined; vi.clearAllMocks(); });
 
 describe('ONE ZERO report import', () => {
+  it('edits imported categories through the shared API and preserves edits after reimport and processing', async () => {
+    db = openDb(':memory:');
+    const app = Fastify();
+    transactionRoutes(app, db);
+    const report = parseOneZeroPages(fixture());
+    saveOneZeroReport(db, report);
+    await runPipeline(db, { fetchRates: false });
+    const rows = (await app.inject({ url: '/api/transactions' })).json().rows as { id: number; amount: number }[];
+    const ids = rows.filter(t => t.amount < 0).map(t => t.id);
+    const categoryId = Number(db.prepare("INSERT INTO categories (name, kind) VALUES ('PDF savings test', 'savings')").run().lastInsertRowid);
+    const edited = await app.inject({ method: 'PATCH', url: `/api/transactions/${ids[0]}`, payload: { categoryId } });
+    expect(edited.statusCode).toBe(200);
+    expect(edited.json()).toMatchObject({ categoryId, categorySource: 'manual', kind: 'savings' });
+    const bulk = await app.inject({ method: 'POST', url: '/api/transactions/bulk', payload: { ids, patch: { categoryId } } });
+    expect(bulk.statusCode).toBe(200);
+    saveOneZeroReport(db, report);
+    await runPipeline(db, { fetchRates: false });
+    const listed = (await app.inject({ url: `/api/transactions?category=${categoryId}` })).json();
+    expect(listed.rows).toHaveLength(2);
+    expect(listed.totals.spend).toBe(0);
+    for (const row of listed.rows) expect(row).toMatchObject({ categoryId, categorySource: 'manual', kind: 'savings' });
+    // An explicit transaction type must still take priority over the category.
+    await app.inject({ method: 'PATCH', url: `/api/transactions/${ids[0]}`, payload: { kind: 'expense', categoryId: null } });
+    saveOneZeroReport(db, report);
+    await runPipeline(db, { fetchRates: false });
+    const cleared = (await app.inject({ url: '/api/transactions' })).json().rows.find((t: { id: number }) => t.id === ids[0]);
+    expect(cleared).toMatchObject({ categoryId: null, categorySource: 'manual', kind: 'expense' });
+    await app.close();
+  });
   it('parses debit signs, value dates, and multiline Hebrew descriptions', () => {
     const report = parseOneZeroPages(fixture());
     expect(report.transactions.map(t => t.chargedAmount)).toEqual([-10, -10, 5]);

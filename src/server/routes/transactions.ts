@@ -102,7 +102,7 @@ export function transactionRoutes(app: FastifyInstance, db: DB): void {
       const add = db.prepare(`INSERT OR IGNORE INTO transaction_tags (transaction_id, tag_id) VALUES (?, ?)`);
       for (const tagId of body.addTagIds as number[]) add.run(id, tagId);
     }
-    if ('kind' in values && values.kind == null) deriveKinds(db, [id]);
+    if ('category_id' in values || ('kind' in values && values.kind == null)) deriveKinds(db, [id]);
   };
 
   // ---- manual entries (cash, paid by someone else… — not on any scraped account) -----------
