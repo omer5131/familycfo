@@ -5,7 +5,7 @@ import { CreditCard, Home, Landmark, Plus, Receipt, TrendingUp, X } from 'lucide
 import { api, type ScheduledItem } from '../api';
 import { useLookups } from '../state';
 import { SCHEDULED_KIND_LABELS } from '../format';
-import { AccountSelect, MemberSelect, Picker, type PickerOption } from './ui';
+import { AccountSelect, CategorySelect, Empty, ErrorBox, Loading, MemberSelect, Picker, type PickerOption } from './ui';
 
 const SCHEDULED_KIND_ICONS: Record<string, ReactNode> = {
   income: <TrendingUp />, fixed_expense: <Receipt />, loan: <Landmark />, mortgage: <Home />, card_charge: <CreditCard />,
@@ -19,35 +19,42 @@ const SCHEDULED_KIND_OPTIONS: PickerOption[] = Object.entries(SCHEDULED_KIND_LAB
  * account and the text that tells they already went out). Fixed payments made with a card are in
  * the list above them (they're part of the card charge).
  */
-export function ScheduledManager() {
+export function ScheduledManager({ expensesOnly = false }: { expensesOnly?: boolean }) {
   const qc = useQueryClient();
   const { meta } = useLookups();
   const scheduled = useQuery({ queryKey: ['scheduled'], queryFn: () => api.get<ScheduledItem[]>('/scheduled') });
-  const refresh = () => { for (const k of ['scheduled', 'summary', 'forecast', 'month-plan', 'transactions', 'planning', 'income']) qc.invalidateQueries({ queryKey: [k] }); };
+  const refresh = () => { for (const k of ['scheduled', 'summary', 'forecast', 'month-plan', 'transactions', 'planning', 'income', 'cashflow', 'budgets', 'cards']) qc.invalidateQueries({ queryKey: [k] }); };
   const patch = useMutation({ mutationFn: ({ path, body }: { path: string; body: Record<string, unknown> }) => api.patch(path, body), onSuccess: refresh });
   const create = useMutation({ mutationFn: (body: Record<string, unknown>) => api.post('/scheduled', body), onSuccess: refresh });
   const all = scheduled.data ?? [];
   const onPatch = (path: string, body: Record<string, unknown>) => patch.mutate({ path, body });
-  const onBank = all.filter(s => !(s.cardAccountId && s.kind !== 'card_charge'));
+  const onBank = all.filter(s => expensesOnly ? ['fixed_expense', 'loan', 'mortgage'].includes(s.kind) : !(s.cardAccountId && s.kind !== 'card_charge'));
   const active = onBank.filter(s => s.status !== 'dismissed');
   const incomeAndCards = active.filter(s => s.kind === 'income' || s.kind === 'card_charge');
   const payments = active.filter(s => s.kind !== 'income' && s.kind !== 'card_charge');
   const dismissed = onBank.filter(s => s.status === 'dismissed');
   const firstBank = meta?.accounts.find(a => a.kind === 'bank')?.id ?? null;
 
+  if (scheduled.isLoading) return <Loading />;
+  if (scheduled.error) return <ErrorBox error={scheduled.error} />;
+
   return (
     <>
-      <p className="-mt-2 mb-3 text-xs leading-relaxed text-muted-foreground">
+      {patch.error && <ErrorBox error={patch.error} />}
+      {create.error && <ErrorBox error={create.error} />}
+      {expensesOnly && <p className="mb-3 text-sm text-muted-foreground">כל ההוצאות הקבועות, בכל החשבונות והחודשים. אפשר לערוך את השדות ולהסיר פריט מהרשימה. הסרה מבטלת את התכנון הקבוע, אך אינה מוחקת תנועות שכבר בוצעו.</p>}
+      {!expensesOnly && <p className="-mt-2 mb-3 text-xs leading-relaxed text-muted-foreground">
         כל פריט פעיל נכנס לתחזית היתרה ביום שלו בחודש, מהחשבון שלו — אלא אם כבר ירד החודש (מזוהה לפי ״תיאור בדף הבנק״).
         אומדן חיוב כרטיס משמש רק כשהכרטיס עוד לא דיווח על החיוב. פריטים שהוסרו לא נספרים בשום חישוב.
-      </p>
+      </p>}
       {incomeAndCards.length > 0 && <div className="scroll-x card-bleed"><ScheduledTable items={incomeAndCards} all={all} onPatch={onPatch} /></div>}
-      <div className="mt-3 flex flex-wrap gap-2">
+      {!expensesOnly && <div className="mt-3 flex flex-wrap gap-2">
         <button className="btn" onClick={() => create.mutate({ name: 'הכנסה חדשה', kind: 'income', amount: 1000, dayOfMonth: 1, bankAccountId: firstBank, status: 'confirmed' })}>
           <Plus />הכנסה קבועה
         </button>
-      </div>
-      {payments.length > 0 && (
+      </div>}
+      {expensesOnly && (payments.length ? <div className="scroll-x"><ScheduledTable items={payments} all={all} expensesOnly onPatch={onPatch} /></div> : <Empty>אין הוצאות קבועות פעילות</Empty>)}
+      {!expensesOnly && payments.length > 0 && (
         <details className="mt-4">
           <summary className="cursor-pointer text-sm text-muted-foreground">עריכה מתקדמת של תשלומים מהבנק — יום, חשבון, זיהוי ({payments.length})</summary>
           <div className="scroll-x card-bleed"><ScheduledTable items={payments} all={all} onPatch={onPatch} /></div>
@@ -56,7 +63,7 @@ export function ScheduledManager() {
       {dismissed.length > 0 && (
         <details className="mt-3">
           <summary className="cursor-pointer text-sm text-muted-foreground">הוסרו — לא נספרים בחישובים ({dismissed.length})</summary>
-          <div className="scroll-x card-bleed"><ScheduledTable items={dismissed} all={all} dismissed onPatch={onPatch} /></div>
+          <div className="scroll-x card-bleed"><ScheduledTable items={dismissed} all={all} dismissed expensesOnly={expensesOnly} onPatch={onPatch} /></div>
         </details>
       )}
     </>
@@ -73,12 +80,13 @@ function sourceOf(s: ScheduledItem, all: ScheduledItem[]): { label: string; to?:
   return { label: 'זוהה מהיסטוריית הבנק' };
 }
 
-function ScheduledTable({ items, all, dismissed, onPatch }: {
-  items: ScheduledItem[]; all: ScheduledItem[]; dismissed?: boolean; onPatch: (path: string, body: Record<string, unknown>) => void;
+function ScheduledTable({ items, all, dismissed, expensesOnly, onPatch }: {
+  items: ScheduledItem[]; all: ScheduledItem[]; dismissed?: boolean; expensesOnly?: boolean; onPatch: (path: string, body: Record<string, unknown>) => void;
 }) {
+  const { meta } = useLookups();
   return (
     <table className={`table ${dismissed ? 'mt-3 opacity-70' : ''}`}>
-      <thead><tr><th>שם</th><th>מקור</th><th>סוג</th><th className="w-28">סכום</th><th className="w-20">יום</th><th>חשבון</th><th>של מי</th>
+      <thead><tr><th>שם</th><th>מקור</th><th>סוג</th><th className="w-28">סכום</th><th className="w-20">יום</th><th>חשבון</th><th>של מי</th>{expensesOnly && <th>קטגוריה</th>}
         <th title="הטקסט בדף הבנק שלפיו מזהים שהתשלום כבר ירד החודש">תיאור בדף הבנק</th><th>סטטוס</th><th /></tr></thead>
       <tbody>
         {items.map(s => {
@@ -86,17 +94,21 @@ function ScheduledTable({ items, all, dismissed, onPatch }: {
           const src = sourceOf(s, all);
           return (
             <tr key={s.id} className={s.status === 'suggested' ? 'bg-amber-50/50 dark:bg-amber-950/10' : ''}>
-              <td className="min-w-44"><input className="input py-1" defaultValue={s.name} onBlur={e => e.target.value !== s.name && onPatch(path, { name: e.target.value })} /></td>
+              <td className="min-w-44"><input className="input py-1" defaultValue={s.name} onBlur={e => e.target.value.trim() && e.target.value.trim() !== s.name && onPatch(path, { name: e.target.value.trim() })} /></td>
               <td className="min-w-32 text-xs">
                 {src.to ? <Link className="text-brand-600 hover:underline" to={src.to}>{src.label}</Link> : <span className="text-zinc-500">{src.label}</span>}
                 {src.why && <div className="text-[11px] text-zinc-500">{src.why}</div>}
               </td>
-              <td className="min-w-32"><Picker className="input py-1" value={s.kind} options={SCHEDULED_KIND_OPTIONS} searchable={false}
+              <td className="min-w-32"><Picker className="input py-1" value={s.kind} options={expensesOnly ? SCHEDULED_KIND_OPTIONS.filter(o => ['fixed_expense', 'loan', 'mortgage'].includes(o.value)) : SCHEDULED_KIND_OPTIONS} searchable={false}
                 onChange={v => v && onPatch(path, { kind: v })} /></td>
-              <td className="min-w-28"><input className="input py-1 num" type="number" defaultValue={s.amount} onBlur={e => Number(e.target.value) !== s.amount && onPatch(path, { amount: Number(e.target.value), amountMode: 'fixed' })} /></td>
-              <td className="min-w-20"><input className="input py-1 num" type="number" min={1} max={31} defaultValue={s.dayOfMonth} onBlur={e => Number(e.target.value) !== s.dayOfMonth && onPatch(path, { dayOfMonth: Number(e.target.value) })} /></td>
-              <td className="min-w-36"><AccountSelect className="input py-1" kind="bank" value={s.bankAccountId} onChange={id => onPatch(path, { bankAccountId: id })} /></td>
+              <td className="min-w-28"><input className="input py-1 num" type="number" defaultValue={expensesOnly ? Math.abs(s.amount) : s.amount} onBlur={e => e.target.value !== '' && Number.isFinite(Number(e.target.value)) && Number(e.target.value) !== (expensesOnly ? Math.abs(s.amount) : s.amount) && onPatch(path, { amount: expensesOnly ? -Math.abs(Number(e.target.value)) : Number(e.target.value), amountMode: 'fixed' })} /></td>
+              <td className="min-w-20"><input className="input py-1 num" type="number" min={1} max={31} defaultValue={s.dayOfMonth} onBlur={e => { const day = Number(e.target.value); if (Number.isInteger(day) && day >= 1 && day <= 31 && day !== s.dayOfMonth) onPatch(path, { dayOfMonth: day }); else e.target.value = String(s.dayOfMonth); }} /></td>
+              <td className="min-w-36"><AccountSelect className="input py-1" kind={expensesOnly ? undefined : 'bank'} value={expensesOnly ? s.cardAccountId ?? s.bankAccountId : s.bankAccountId} onChange={id => {
+                const card = expensesOnly && meta?.accounts.find(a => a.id === id)?.kind === 'card';
+                onPatch(path, expensesOnly ? { bankAccountId: card ? null : id, cardAccountId: card ? id : null } : { bankAccountId: id });
+              }} /></td>
               <td className="min-w-28"><MemberSelect className="input py-1" value={s.memberId} emptyLabel="משותף" onChange={id => onPatch(path, { memberId: id })} /></td>
+              {expensesOnly && <td className="min-w-36"><CategorySelect value={s.categoryId} onChange={id => onPatch(path, { categoryId: id })} /></td>}
               <td className="min-w-32">{s.kind === 'card_charge' ? <span className="text-xs text-zinc-400">—</span> : (
                 <input className="input py-1 text-xs" defaultValue={s.matchPattern ?? ''} placeholder="לפי השם"
                   onBlur={e => e.target.value !== (s.matchPattern ?? '') && onPatch(path, { matchPattern: e.target.value || null })} />

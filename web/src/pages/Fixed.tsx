@@ -35,6 +35,7 @@ export default function Fixed() {
   const { params } = useFilters();
   const { accountName } = useLookups();
   const qc = useQueryClient();
+  const [managingFixed, setManagingFixed] = useState(false);
   const [cycleKey, setCycleKey] = useState<string | null>(null);
   const [view, setView] = useState<'accounts' | 'categories'>('accounts');
   const [adding, setAdding] = useState<{ name: string; amount: number; day: number; accountId: string | null; categoryId: number | null; matchPattern: string } | null>(null);
@@ -182,6 +183,7 @@ export default function Fixed() {
               { value: 'accounts', label: 'לפי חשבון וכרטיס', icon: Wallet },
               { value: 'categories', label: 'לפי קטגוריה', icon: PieChart },
             ]} />
+            <button className="btn" onClick={() => setManagingFixed(true)}><Pencil />ניהול כל ההוצאות הקבועות</button>
             <button className="btn" onClick={() => setAdding({ name: '', amount: 0, day: 1, accountId: null, categoryId: null, matchPattern: '' })}>+ הוסף הוצאה קבועה</button>
           </div>
         }>
@@ -276,6 +278,11 @@ export default function Fixed() {
 
       {plannedForm && <ManualEntry defaultPlanned planned={plannedForm === 'new' ? null : plannedForm}
         onClose={() => setPlannedForm(null)} onSaved={() => { refresh(); setPlannedForm(null); }} />}
+
+      {managingFixed && <Modal wide title="ניהול כל ההוצאות הקבועות" onClose={() => setManagingFixed(false)}
+        footer={<button className="btn" onClick={() => setManagingFixed(false)}>סגור</button>}>
+        <ScheduledManager expensesOnly />
+      </Modal>}
 
       {adding && (
         <Modal title="הוצאה קבועה חדשה" onClose={() => setAdding(null)} footer={<>
